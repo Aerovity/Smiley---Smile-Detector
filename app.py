@@ -35,6 +35,7 @@ def process_video_task(video_id, input_path, output_path):
         def progress_callback(frame_number, total_frames, frame, results):
             progress = int((frame_number / total_frames) * 100)
             processing_status[video_id]['progress'] = progress
+            return True  # Continue processing
         
         # Process the video
         detector.process_video(input_path, output_path, progress_callback)
@@ -122,8 +123,9 @@ def video(video_id):
     if video_id not in processing_status or 'output_path' not in processing_status[video_id]:
         return redirect(url_for('index'))
     
-    return send_from_directory(app.config['PROCESSED_FOLDER'], 
-                              os.path.basename(processing_status[video_id]['output_path']))
+    # Get just the filename part without the directory
+    filename = os.path.basename(processing_status[video_id]['output_path'])
+    return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
 
 @app.route('/uploads/<filename>')
 def uploaded_file(filename):
@@ -134,4 +136,4 @@ def processed_file(filename):
     return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    app.run(debug=True)

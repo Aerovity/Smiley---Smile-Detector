@@ -3,13 +3,11 @@ import os # Import os for file path operations
 import dlib # Import dlib for face detection and landmark prediction    
 import urllib.request # Import urllib for downloading files
 import numpy as np # Import numpy for numerical operations
+import bz2 # Import bz2 for decompression
+
 class SmileDetector: 
     def __init__(self):
         self.predictor_path = "shape_predictor_68_face_landmarks.dat"
-
-        if not os.path.exists(self.predictor_path):
-            print("Downloading facial landmark predictor model...")
-            url = "https://github.com/davisking/dlib-models/raw/master/shape_predictor_68_face_landmarks.dat.bz2"
 
         if not os.path.exists(self.predictor_path):
             print("Downloading facial landmark predictor model...")
@@ -19,7 +17,6 @@ class SmileDetector:
                 urllib.request.urlretrieve(url, self.predictor_path + ".bz2")
                 
                 # Extract the bz2 file
-                import bz2
                 with open(self.predictor_path, 'wb') as new_file, bz2.BZ2File(self.predictor_path + ".bz2", 'rb') as file:
                     for data in iter(lambda: file.read(100 * 1024), b''):
                         new_file.write(data)
@@ -58,6 +55,7 @@ class SmileDetector:
             return dlib_faces
                 
         return faces
+    
     def get_landmarks(self, frame, face):
         """Get facial landmarks for a detected face"""
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -115,45 +113,56 @@ class SmileDetector:
         
         results = []
         for face in faces:
-            # Get facial landmarks
-            landmarks = self.get_landmarks(frame, face)
-            
-            # Calculate smile probability
-            smile_probability = self.calculate_smile_probability(landmarks)
-            
-            # Get mouth landmarks for visualization
-            mouth_points = self.get_mouth_landmarks(landmarks)
-            
-            # Draw face rectangle
-            x, y, w, h = face.left(), face.top(), face.width(), face.height()
-            cv2.rectangle(result_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-            
-            # Draw mouth landmarks
-            for point in mouth_points:
-                cv2.circle(result_frame, point, 2, (0, 0, 255), -1)
-            
-            # Draw smile probability
-            text = f"Smile: {smile_probability:.2f}"
-            cv2.putText(result_frame, text, (x, y - 10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            
-            results.append({
-                'face': (x, y, w, h),
-                'smile_probability': smile_probability,
-                'mouth_points': mouth_points
-            })
-
-            return result_frame, results
+            try:
+                # Get facial landmarks
+                landmarks = self.get_landmarks(frame, face)
+                
+                # Calculate smile probability
+                smile_probability = self.calculate_smile_probability(landmarks)
+                
+                # Get mouth landmarks for visualization
+                mouth_points = self.get_mouth_landmarks(landmarks)
+                
+                # Draw face rectangle
+                x, y, w, h = face.left(), face.top(), face.width(), face.height()
+                cv2.rectangle(result_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+                
+                # Draw mouth landmarks
+                for point in mouth_points:
+                    cv2.circle(result_frame, point, 2, (0, 0, 255), -1)
+                
+                # Draw smile probability
+                text = f"Smile: {smile_probability:.2f}"
+                cv2.putText(result_frame, text, (x, y - 10), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                
+                results.append({
+                    'face': (x, y, w, h),
+                    'smile_probability': smile_probability,
+                    'mouth_points': mouth_points
+                })
+            except Exception as e:
+                print(f"Error processing face: {str(e)}")
+                continue
+        
+        # Return after processing all faces (not just the first one)
+        return result_frame, results
     
     def process_video(self, video_path, output_path=None, frame_callback=None):
         """Process a video file and detect smiles in each frame"""
         cap = cv2.VideoCapture(video_path)
+        
+        if not cap.isOpened():
+            raise Exception(f"Could not open video file: {video_path}")
         
         # Get video properties
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         fps = cap.get(cv2.CAP_PROP_FPS)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        
+        if frame_count <= 0:
+            frame_count = 1000  # Fallback estimate if frame count is not available
         
         # Create video writer if output path is provided
         if output_path:
@@ -168,30 +177,33 @@ class SmileDetector:
             if not ret:
                 break
             
-            # Process the frame
-            result_frame, frame_results = self.process_frame(frame)
-            
-            # Store results
-            all_results.append({
-                'frame_number': frame_number,
-                'results': frame_results
-            })
-            
-            # Write the frame to output video if needed
-            if output_path:
-                out.write(result_frame)
-            
-            # Call the callback function if provided
-            if frame_callback:
-                continue_processing = frame_callback(frame_number, frame_count, result_frame, frame_results)
-                if continue_processing is False:
-                    break
+            try:
+                # Process the frame
+                result_frame, frame_results = self.process_frame(frame)
+                
+                # Store results
+                all_results.append({
+                    'frame_number': frame_number,
+                    'results': frame_results
+                })
+                
+                # Write the frame to output video if needed
+                if output_path and out.isOpened():
+                    out.write(result_frame)
+                
+                # Call the callback function if provided
+                if frame_callback:
+                    continue_processing = frame_callback(frame_number, frame_count, result_frame, frame_results)
+                    if continue_processing is False:
+                        break
+            except Exception as e:
+                print(f"Error processing frame {frame_number}: {str(e)}")
             
             frame_number += 1
         
         # Release resources
         cap.release()
-        if output_path:
+        if output_path and 'out' in locals() and out.isOpened():
             out.release()
         
-        return all_results 
+        return all_results
