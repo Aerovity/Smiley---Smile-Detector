@@ -1,19 +1,18 @@
 import os
-import uuid #universal unique identifier
-import threading #for running background tasks
-from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory #web app framework creation, request handling, and response generation
-from werkzeug.utils import secure_filename #Sanitizes filenames to prevent directory traversal or malicious uploads
-from smile_utils import SmileDetector #Custom module that contains the video Analysis logic
-from flask_cors import CORS
-app = Flask(__name__) #Create a Flask application instance
-CORS(app) #Enable Cross-Origin Resource Sharing (CORS) for the app
-app.config['UPLOAD_FOLDER'] = 'uploads' #Directory to store uploaded videos
-app.config['PROCESSED_FOLDER'] = 'processed' #Directory to store processed videos
-app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'wmv', 'mkv'} #Allowed video file extensions
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload size (Maximum content length)
+import uuid
+import threading
+from flask import Flask, render_template, request, redirect, url_for, jsonify, send_from_directory
+from werkzeug.utils import secure_filename
+from smile_utils import SmileDetector
 
-# Create necessary directories (if they don't exist)
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True) 
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['PROCESSED_FOLDER'] = 'processed'
+app.config['ALLOWED_EXTENSIONS'] = {'mp4', 'avi', 'mov', 'wmv', 'mkv'}
+app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload size
+
+# Create necessary directories
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['PROCESSED_FOLDER'], exist_ok=True)
 os.makedirs('static', exist_ok=True)
 
@@ -23,8 +22,7 @@ detector = SmileDetector()
 # Store processing status
 processing_status = {}
 
-def allowed_file(filename): 
-    """Check if the file has an allowed extension"""
+def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
@@ -136,5 +134,4 @@ def processed_file(filename):
     return send_from_directory(app.config['PROCESSED_FOLDER'], filename)
 
 if __name__ == '__main__':
-    print("Running Flask app...")
     app.run(debug=True) 
